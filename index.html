@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#101d17">
+<title>Terrario — simulación de vida artificial</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23101d17'/%3E%3Crect x='20' y='14' width='60' height='10' rx='4' fill='%2333503e'/%3E%3Crect x='14' y='26' width='72' height='60' rx='18' fill='%230e1a14' stroke='%2333503e' stroke-width='4'/%3E%3Cellipse cx='36' cy='70' rx='7' ry='12' fill='%237fae5e'/%3E%3Cellipse cx='50' cy='74' rx='6' ry='9' fill='%235c8a45'/%3E%3Ccircle cx='64' cy='66' r='6' fill='%23e0a640'/%3E%3Cpolygon points='78,48 66,54 66,42' fill='%23c1503f'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23101d17'/%3E%3Crect x='14' y='26' width='72' height='60' rx='18' fill='%230e1a14' stroke='%2333503e' stroke-width='4'/%3E%3Cellipse cx='36' cy='70' rx='7' ry='12' fill='%237fae5e'/%3E%3Ccircle cx='64' cy='66' r='6' fill='%23e0a640'/%3E%3Cpolygon points='78,48 66,54 66,42' fill='%23c1503f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,900;1,9..144,500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#101d17;--panel:#182720;--panel-2:#20362a;--paper:#ece1c6;--ink:#eee6d2;--ink-muted:#93aa96;--line:#33503e;--leaf:#7fae5e;--leaf-dim:#4c7440;--amber:#e0a640;--amber-dim:#a97a2f;--brick:#c1503f;--brick-dim:#8f3b2d;--glass-hi:rgba(255,255,255,.10);--shadow:rgba(0,0,0,.45)}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:radial-gradient(ellipse at 20% -10%,#1a2e21 0%,transparent 55%),radial-gradient(ellipse at 90% 110%,#0d1712 0%,transparent 50%),var(--bg);background-attachment:fixed;color:var(--ink);font-family:'Space Mono',monospace;min-height:100vh;min-height:100dvh}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px;border-bottom:1px dashed var(--line);padding-bottom:16px;margin-bottom:22px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand .mark{font-family:'Fraunces',serif;font-weight:900;font-size:2rem;letter-spacing:-.01em;color:var(--paper)}
+.brand .sub{font-style:italic;font-family:'Fraunces',serif;font-weight:500;color:var(--ink-muted);font-size:.95rem}
+.day-badge{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.day-badge b{color:var(--paper);font-size:1rem;letter-spacing:.02em}
+.layout{display:grid;grid-template-columns:1.6fr 1fr;gap:22px;align-items:start}
+@media (max-width:880px){.layout{grid-template-columns:1fr}}
+.jar{position:relative;border-radius:26px;padding:14px 14px 20px;background:linear-gradient(180deg,#0e1a14,#0a130f);border:1px solid var(--line);box-shadow:0 20px 50px var(--shadow),inset 0 0 0 1px rgba(255,255,255,.02)}
+.lid{height:14px;border-radius:10px;margin-bottom:10px;background:repeating-linear-gradient(90deg,var(--panel-2) 0 6px,transparent 6px 12px),var(--line);opacity:.8}
+.canvas-frame{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:inset 0 0 40px rgba(0,0,0,.5);cursor:default}
+.canvas-frame.sowing{cursor:crosshair}
+#terrarium{display:block;width:100%;height:auto;background:#0b1712;touch-action:pan-y}
+.canvas-frame.sowing #terrarium{touch-action:none} /* solo bloquea el scroll táctil cuando hay una herramienta activa */
+@keyframes stormShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-3px)}60%{transform:translate(-3px,3px)}80%{transform:translate(3px,-2px)}}
+.canvas-frame.storm{animation:stormShake .6s ease-in-out}
+.canvas-frame.storm::after{content:'';position:absolute;inset:0;background:rgba(20,26,22,.55);pointer-events:none;animation:stormFade .7s ease-out}
+@keyframes stormFade{0%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.canvas-frame.storm{animation:none}}
+.glass-sheen{position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,var(--glass-hi) 0%,transparent 18%),radial-gradient(circle at 85% 12%,rgba(255,255,255,.08),transparent 30%)}
+.condensation{position:absolute;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.16),transparent 70%)}
+.jar-caption{margin-top:10px;font-size:.72rem;color:var(--ink-muted);letter-spacing:.03em;padding:0 4px}
+.notebook{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:18px}
+.notebook h2{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-muted);margin:0 0 10px;border-bottom:1px dashed var(--line);padding-bottom:8px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font-family:'Space Mono',monospace;font-size:.76rem;letter-spacing:.03em;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:10px 14px;min-height:40px;cursor:pointer;transition:transform .08s ease,border-color .15s ease,background .15s ease;-webkit-tap-highlight-color:transparent}
+button:hover{border-color:#4a7359}
+button:active{transform:scale(.96)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:disabled:active{transform:none}
+button.active{background:var(--leaf-dim);border-color:var(--leaf);color:var(--paper)}
+button.wide{flex:1 1 auto;text-align:center}
+button.tool-herb.active{background:var(--amber-dim);border-color:var(--amber)}
+button.tool-pred.active{background:var(--brick-dim);border-color:var(--brick)}
+button.disaster-btn{border-color:var(--brick);width:100%}
+button.disaster-btn:hover:not(:disabled){background:var(--brick-dim)}
+.hint{font-size:.7rem;color:var(--ink-muted);margin-top:6px;line-height:1.5}
+.stat-line{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:.82rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.stat-line:last-child{border-bottom:none}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:8px;flex:none}
+.dot.leaf{background:var(--leaf)}.dot.amber{background:var(--amber)}.dot.brick{background:var(--brick)}
+.stat-label{display:flex;align-items:center;color:var(--ink-muted)}
+.stat-value{font-weight:700;color:var(--paper)}
+.stat-sub{font-size:.68rem;color:var(--ink-muted);margin-left:6px;font-weight:400}
+#chart{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--line);background:#0e1a14}
+.note{font-family:'Fraunces',serif;font-style:italic;font-size:.86rem;color:var(--paper);background:var(--panel-2);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;line-height:1.45;min-height:1.4em}
+footer.foot{margin-top:26px;font-size:.7rem;color:var(--ink-muted);text-align:center;letter-spacing:.02em}
+.help-btn{margin-left:10px;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-muted);font-size:.75rem;line-height:1;padding:0;min-height:0;display:inline-flex;align-items:center;justify-content:center}
+.overlay{position:fixed;inset:0;background:rgba(6,12,9,.82);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+.modal{max-width:440px;width:100%;max-height:100%;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 26px 22px;box-shadow:0 30px 70px var(--shadow)}
+.modal-title{font-family:'Fraunces',serif;font-weight:900;font-size:1.6rem;margin:0 0 2px;color:var(--paper)}
+.modal-sub{font-family:'Fraunces',serif;font-style:italic;color:var(--ink-muted);margin:0 0 16px;font-size:.9rem}
+.modal-body{font-size:.82rem;line-height:1.6}
+.modal-body ul{list-style:none;padding:0;margin:10px 0}
+.modal-body li{padding:4px 0;display:flex;align-items:baseline;gap:6px}
+.modal-body b{color:var(--paper)}
+.start-btn{margin-top:16px;width:100%;background:var(--leaf-dim);border-color:var(--leaf);color:var(--paper);font-size:.82rem;padding:11px}
+.start-btn:hover{background:var(--leaf);color:#0e1a14}
+</style>
+</head>
+<body>
+
+<div class="overlay" id="introOverlay">
+  <div class="modal">
+    <h3 class="modal-title">Terrario</h3>
+    <p class="modal-sub">cuaderno de vida artificial</p>
+    <div class="modal-body">
+      <p>Esto no es una partida contra una máquina: es un ecosistema en miniatura que observas y cuidas. Dentro conviven tres tipos de vida:</p>
+      <ul>
+        <li><span class="dot leaf"></span> <b>Plantas</b> — brotan solas del suelo.</li>
+        <li><span class="dot amber"></span> <b>Herbívoros</b> — buscan plantas y huyen de los depredadores.</li>
+        <li><span class="dot brick"></span> <b>Depredadores</b> — cazan herbívoros para sobrevivir.</li>
+      </ul>
+      <p>Cada cría hereda y muta un poco la velocidad y visión de sus padres, así que la población evoluciona sola con el tiempo.</p>
+      <p><b>Tu papel</b> es el de guardián: usa las herramientas del panel derecho para sembrar plantas o soltar criaturas, y controla la velocidad del tiempo. El objetivo es mantener el terrario con vida el mayor número de días posible — si herbívoros y depredadores se extinguen a la vez, el terrario colapsa y la partida termina.</p>
+      <p>Si la población se te desborda, tienes un <b>huracán</b> de emergencia: reduce a la fauna y las plantas de golpe, pero solo puedes usarlo unas pocas veces y con tiempo de espera entre cada uno.</p>
+    </div>
+    <button id="startBtn" class="start-btn">Entendido, comenzar</button>
+  </div>
+</div>
+
+<div class="overlay" id="gameOverOverlay" style="display:none">
+  <div class="modal">
+    <h3 class="modal-title">Colapso total</h3>
+    <p class="modal-sub">El terrario quedó sin fauna.</p>
+    <div class="modal-body">
+      <p>Sobreviviste <b id="finalDay">1</b> días.</p>
+      <p id="bestDayText">Mejor marca de esta sesión: Día 1.</p>
+    </div>
+    <button id="restartBtn" class="start-btn">Volver a sembrar</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="mark">Terrario</span><span class="sub">cuaderno de vida artificial</span></div>
+    <div class="day-badge">
+      Día <b id="dayCount">1</b> &nbsp;·&nbsp; Mejor <b id="bestDayCount">1</b> &nbsp;·&nbsp; <span id="popTotal">0</span> criaturas
+      <button id="helpBtn" class="help-btn" title="Ver instrucciones" aria-label="Ver instrucciones">?</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="jar">
+      <div class="lid"></div>
+      <div class="canvas-frame" id="canvasFrame">
+        <canvas id="terrarium" width="760" height="460"></canvas>
+        <div class="glass-sheen"></div>
+        <div class="condensation" style="width:60px;height:60px;top:8%;left:6%"></div>
+        <div class="condensation" style="width:24px;height:24px;top:22%;left:14%"></div>
+        <div class="condensation" style="width:38px;height:38px;top:70%;left:88%"></div>
+      </div>
+      <div class="jar-caption">Toca el vidrio con una herramienta activa para sembrar o soltar criaturas.</div>
+    </div>
+
+    <div class="notebook">
+      <div>
+        <h2>Control del tiempo</h2>
+        <div class="row">
+          <button id="playPause" class="wide">⏸ Pausar</button>
+          <button id="resetBtn" class="wide">↺ Reiniciar</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="speed active" data-speed="1">1×</button>
+          <button class="speed" data-speed="2">2×</button>
+          <button class="speed" data-speed="4">4×</button>
+        </div>
+      </div>
+      <div>
+        <h2>Sembrar en el terrario</h2>
+        <div class="row">
+          <button class="tool tool-planta" data-tool="planta">🌿 Planta</button>
+          <button class="tool tool-herb" data-tool="herbivoro">🐇 Herbívoro</button>
+          <button class="tool tool-pred" data-tool="depredador">🦊 Depredador</button>
+        </div>
+        <p class="hint" id="toolHint"></p>
+      </div>
+      <div>
+        <h2>Evento natural</h2>
+        <button id="hurricaneBtn" class="disaster-btn">🌀 Huracán ×3</button>
+        <p class="hint" id="hurricaneHint">Reduce la población de golpe. Úsalo cuando el terrario se desborde.</p>
+      </div>
+      <div>
+        <h2>Población</h2>
+        <div class="stat-line"><span class="stat-label"><span class="dot leaf"></span>Plantas</span><span class="stat-value" id="statPlants">0</span></div>
+        <div class="stat-line"><span class="stat-label"><span class="dot amber"></span>Herbívoros</span><span class="stat-value"><span id="statHerb">0</span><span class="stat-sub" id="statHerbTraits"></span></span></div>
+        <div class="stat-line"><span class="stat-label"><span class="dot brick"></span>Depredadores</span><span class="stat-value"><span id="statPred">0</span><span class="stat-sub" id="statPredTraits"></span></span></div>
+      </div>
+      <div>
+        <h2>Historial de población</h2>
+        <canvas id="chart" width="420" height="120"></canvas>
+      </div>
+      <div>
+        <h2>Nota de campo</h2>
+        <div class="note" id="fieldNote">El terrario recién sembrado empieza a despertar.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">cada criatura hereda y muta sus rasgos de velocidad y visión al reproducirse — observa cómo cambia la población con el tiempo.</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+
+// El mundo tiene un tamaño lógico FIJO: la simulación se comporta igual en cualquier pantalla
+// y solo se escala el dibujo (antes cambiaba la densidad según el tamaño de la ventana).
+const W = 760, H = 460, CW = 420, CH = 120;
+const canvas = $('terrarium'), ctx = canvas.getContext('2d');
+const chartCanvas = $('chart'), chartCtx = chartCanvas.getContext('2d');
+const canvasFrame = $('canvasFrame'), toolHint = $('toolHint');
+const HINT_IDLE = 'Elige una herramienta y toca (o arrastra sobre) el terrario. Vuelve a tocar la herramienta para soltarla.';
+toolHint.textContent = HINT_IDLE;
+
+const CONFIG = {
+  plant: { max:45, spawnChance:0.05, energy:25, growTicks:15 },
+  herb: { start:60, max:140, reproThresh:95, reproChance:0.02, metabolism:0.15, speedMin:2, speedMax:4, sightMin:70, sightMax:120, radius:5, cap:90, dangerMult:0.75, fleeMult:1.55, eatDist:9 },
+  pred: { start:80, max:170, reproThresh:120, reproChance:0.018, metabolism:0.22, speedMin:2.5, speedMax:5, sightMin:100, sightMax:160, radius:6.5, cap:40, eatDist:11 },
+  disaster: { maxUses:3, cooldownTicks:150, herbKillRate:0.45, predKillRate:0.45, plantKillRate:0.35 },
+  tickMs: 100
+};
+
+let plants = [], herbivores = [], predators = [], history = [];
+let tick = 0, running = false, speedMult = 1, placeMode = null;
+let accumulator = 0, lastFrameTime = null, lastUiUpdate = 0;
+let isSowing = false, lastSowPos = null, bestDay = 1, gameOverShown = false, wasRunningBeforeModal = true;
+let hurricanesLeft = CONFIG.disaster.maxUses, hurricaneCooldownUntil = 0, disasterMessage = '', disasterNoteUntilTick = 0;
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const mutate = (v, min, max, rate) => clamp(v + (Math.random() - .5) * 2 * rate * (max - min), min, max);
+
+// ---------- Tamaño del canvas (resolución nítida, mundo fijo) ----------
+function fitCanvas(el, c2d, lw, lh) {
+  const cssW = Math.max(100, el.getBoundingClientRect().width);
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const pw = Math.round(cssW * dpr), ph = Math.round(pw * lh / lw);
+  if (el.width !== pw || el.height !== ph) { el.width = pw; el.height = ph; }
+  c2d.setTransform(pw / lw, 0, 0, ph / lh, 0, 0);
+}
+function resizeAll() { fitCanvas(canvas, ctx, W, H); fitCanvas(chartCanvas, chartCtx, CW, CH); }
+let resizeTimeout = null;
+const scheduleResize = () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(resizeAll, 100); };
+
+// ---------- Entidades ----------
+function spawnPlant(x, y) {
+  if (plants.length >= CONFIG.plant.max) return false;
+  plants.push({ x: clamp(x, 10, W - 10), y: clamp(y, 10, H - 10), born: tick, r: 2 });
+  return true;
+}
+function makeCreature(c, x, y, traits) {
+  return {
+    x: clamp(x, 10, W - 10), y: clamp(y, 10, H - 10), angle: rand(0, Math.PI * 2), energy: c.start,
+    speed: traits ? mutate(traits.speed, c.speedMin, c.speedMax, .18) : rand(c.speedMin, c.speedMax),
+    sight: traits ? mutate(traits.sight, c.sightMin, c.sightMax, .18) : rand(c.sightMin, c.sightMax)
+  };
+}
+const makeHerbivore = (x, y, t) => makeCreature(CONFIG.herb, x, y, t);
+const makePredator = (x, y, t) => makeCreature(CONFIG.pred, x, y, t);
+
+function spawnAt(kind, x, y) {
+  if (kind === 'planta') return spawnPlant(x, y);
+  if (kind === 'herbivoro' && herbivores.length < CONFIG.herb.cap) { herbivores.push(makeHerbivore(x, y)); return true; }
+  if (kind === 'depredador' && predators.length < CONFIG.pred.cap) { predators.push(makePredator(x, y)); return true; }
+  return false;
+}
+
+function initEcosystem() {
+  plants = []; herbivores = []; predators = []; history = [];
+  tick = 0; accumulator = 0;
+  hurricanesLeft = CONFIG.disaster.maxUses; hurricaneCooldownUntil = 0; disasterNoteUntilTick = 0;
+  for (let i = 0; i < 18; i++) spawnPlant(rand(20, W - 20), rand(20, H - 20));
+  for (let i = 0; i < 12; i++) herbivores.push(makeHerbivore(rand(20, W - 20), rand(20, H - 20)));
+  for (let i = 0; i < 4; i++) predators.push(makePredator(rand(20, W - 20), rand(20, H - 20)));
+  updateStatsDOM();
+}
+
+// ---------- Simulación ----------
+function nearest(list, x, y, maxRange) {
+  let best = null, bestD = maxRange;
+  for (const o of list) { const d = dist(x, y, o.x, o.y); if (d < bestD) { bestD = d; best = o; } }
+  return best ? { obj: best, d: bestD } : null;
+}
+function moveToward(a, tx, ty, s) {
+  const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+  a.x += dx / d * s; a.y += dy / d * s; a.angle = Math.atan2(dy, dx);
+}
+function moveAway(a, fx, fy, s) {
+  const dx = a.x - fx, dy = a.y - fy, d = Math.hypot(dx, dy) || 1;
+  a.x += dx / d * s; a.y += dy / d * s; a.angle = Math.atan2(dy, dx);
+}
+function wander(a, s) {
+  a.angle += (Math.random() - .5) * .5;
+  a.x += Math.cos(a.angle) * s * .55; a.y += Math.sin(a.angle) * s * .55;
+}
+function bounce(a) {
+  if (a.x < 6) { a.x = 6; a.angle = Math.PI - a.angle; }
+  if (a.x > W - 6) { a.x = W - 6; a.angle = Math.PI - a.angle; }
+  if (a.y < 6) { a.y = 6; a.angle = -a.angle; }
+  if (a.y > H - 6) { a.y = H - 6; a.angle = -a.angle; }
+}
+
+function triggerHurricane() {
+  if (hurricanesLeft <= 0 || tick < hurricaneCooldownUntil || gameOverShown) return;
+  const c = CONFIG.disaster;
+  hurricanesLeft--; hurricaneCooldownUntil = tick + c.cooldownTicks;
+  herbivores = herbivores.filter(() => Math.random() > c.herbKillRate);
+  predators = predators.filter(() => Math.random() > c.predKillRate);
+  plants = plants.filter(() => Math.random() > c.plantKillRate);
+  disasterMessage = 'Un huracán arrasó el terrario: la población cayó de golpe.';
+  disasterNoteUntilTick = tick + 50;
+  canvasFrame.classList.add('storm');
+  setTimeout(() => canvasFrame.classList.remove('storm'), 700);
+  checkGameOver();
+  updateStatsDOM();
+}
+
+function updateHurricaneButton() {
+  const btn = $('hurricaneBtn'), hint = $('hurricaneHint');
+  if (hurricanesLeft <= 0) {
+    btn.disabled = true; btn.textContent = '🌀 Huracán agotado';
+    hint.textContent = 'Ya usaste tus huracanes disponibles en esta sesión.';
+  } else if (tick < hurricaneCooldownUntil) {
+    const secs = Math.max(1, Math.ceil((hurricaneCooldownUntil - tick) * CONFIG.tickMs / speedMult / 1000));
+    btn.disabled = true; btn.textContent = `🌀 Enfriando… ${secs}s`;
+    hint.textContent = `Podrás usarlo de nuevo en unos segundos. Quedan ${hurricanesLeft}.`;
+  } else {
+    btn.disabled = false; btn.textContent = `🌀 Huracán ×${hurricanesLeft}`;
+    hint.textContent = 'Reduce la población de golpe. Úsalo cuando el terrario se desborde.';
+  }
+}
+
+function step() {
+  tick++;
+  const c = CONFIG;
+  if (plants.length < c.plant.max && Math.random() < c.plant.spawnChance) spawnPlant(rand(15, W - 15), rand(15, H - 15));
+  for (const p of plants) p.r = 2 + clamp((tick - p.born) / c.plant.growTicks, 0, 1) * 5;
+
+  const newHerb = [];
+  for (let i = herbivores.length - 1; i >= 0; i--) {
+    const h = herbivores[i];
+    const threat = nearest(predators, h.x, h.y, h.sight * c.herb.dangerMult);
+    if (threat) moveAway(h, threat.obj.x, threat.obj.y, h.speed * c.herb.fleeMult);
+    else {
+      const food = nearest(plants, h.x, h.y, h.sight);
+      if (food) {
+        if (food.d < c.herb.eatDist) {
+          const idx = plants.indexOf(food.obj);
+          if (idx !== -1) plants.splice(idx, 1);
+          h.energy = Math.min(c.herb.max, h.energy + c.plant.energy);
+        } else moveToward(h, food.obj.x, food.obj.y, h.speed);
+      } else wander(h, h.speed);
+    }
+    bounce(h);
+    h.energy -= c.herb.metabolism;
+    if (h.energy > c.herb.reproThresh && herbivores.length + newHerb.length < c.herb.cap && Math.random() < c.herb.reproChance) {
+      h.energy *= .55;
+      const child = makeHerbivore(h.x + rand(-14, 14), h.y + rand(-14, 14), h);
+      child.energy = c.herb.start;
+      newHerb.push(child);
+    }
+    if (h.energy <= 0) herbivores.splice(i, 1);
+  }
+  herbivores.push(...newHerb);
+
+  const newPred = [];
+  for (let i = predators.length - 1; i >= 0; i--) {
+    const pr = predators[i];
+    const prey = nearest(herbivores, pr.x, pr.y, pr.sight);
+    if (prey) {
+      if (prey.d < c.pred.eatDist) {
+        const idx = herbivores.indexOf(prey.obj);
+        if (idx !== -1) herbivores.splice(idx, 1);
+        pr.energy = Math.min(c.pred.max, pr.energy + 45);
+      } else moveToward(pr, prey.obj.x, prey.obj.y, pr.speed);
+    } else wander(pr, pr.speed);
+    bounce(pr);
+    pr.energy -= c.pred.metabolism;
+    if (pr.energy > c.pred.reproThresh && predators.length + newPred.length < c.pred.cap && Math.random() < c.pred.reproChance) {
+      pr.energy *= .55;
+      const child = makePredator(pr.x + rand(-14, 14), pr.y + rand(-14, 14), pr);
+      child.energy = c.pred.start;
+      newPred.push(child);
+    }
+    if (pr.energy <= 0) predators.splice(i, 1);
+  }
+  predators.push(...newPred);
+
+  if (tick % 18 === 0) {
+    history.push({ p: plants.length, h: herbivores.length, r: predators.length });
+    if (history.length > 90) history.shift();
+  }
+}
+
+// ---------- Dibujo ----------
+function render() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0c1a13'); g.addColorStop(.72, '#0e1f16'); g.addColorStop(1, '#1c2416');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  for (const p of plants) {
+    ctx.fillStyle = '#7fae5e';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r * .65, p.r, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5c8a45';
+    ctx.beginPath(); ctx.ellipse(p.x - p.r * .4, p.y + p.r * .2, p.r * .4, p.r * .6, .6, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const h of herbivores) {
+    ctx.globalAlpha = clamp(h.energy / CONFIG.herb.max, .35, 1);
+    ctx.fillStyle = '#e0a640';
+    ctx.beginPath(); ctx.arc(h.x, h.y, CONFIG.herb.radius, 0, Math.PI * 2); ctx.fill();
+  }
+  const r = CONFIG.pred.radius;
+  for (const pr of predators) {
+    ctx.globalAlpha = clamp(pr.energy / CONFIG.pred.max, .35, 1);
+    ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(pr.angle);
+    ctx.fillStyle = '#c1503f';
+    ctx.beginPath(); ctx.moveTo(r * 1.5, 0); ctx.lineTo(-r, r * .9); ctx.lineTo(-r, -r * .9); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawChart() {
+  chartCtx.fillStyle = '#0e1a14'; chartCtx.fillRect(0, 0, CW, CH);
+  if (history.length < 2) return;
+  let maxV = 10;
+  for (const pt of history) maxV = Math.max(maxV, pt.p, pt.h, pt.r);
+  const line = (key, color) => {
+    chartCtx.beginPath(); chartCtx.strokeStyle = color; chartCtx.lineWidth = 1.6;
+    history.forEach((pt, i) => {
+      const x = i / (history.length - 1) * CW, y = CH - pt[key] / maxV * (CH - 8) - 4;
+      i ? chartCtx.lineTo(x, y) : chartCtx.moveTo(x, y);
+    });
+    chartCtx.stroke();
+  };
+  line('p', '#7fae5e'); line('h', '#e0a640'); line('r', '#c1503f');
+}
+
+// ---------- Estadísticas y notas ----------
+const avg = (list, key) => list.length ? list.reduce((s, o) => s + o[key], 0) / list.length : 0;
+const traitsText = list => list.length ? `vel ${avg(list, 'speed').toFixed(1)} · vis ${avg(list, 'sight').toFixed(0)}` : '';
+
+function updateStatsDOM() {
+  $('statPlants').textContent = plants.length;
+  $('statHerb').textContent = herbivores.length;
+  $('statPred').textContent = predators.length;
+  $('popTotal').textContent = herbivores.length + predators.length;
+  const day = Math.floor(tick / 240) + 1;
+  if (day > bestDay) bestDay = day;
+  $('dayCount').textContent = day;
+  $('bestDayCount').textContent = bestDay;
+  $('statHerbTraits').textContent = traitsText(herbivores);
+  $('statPredTraits').textContent = traitsText(predators);
+
+  const note = $('fieldNote');
+  if (tick < disasterNoteUntilTick) note.textContent = disasterMessage;
+  else if (!herbivores.length && !predators.length) note.textContent = 'El terrario ha quedado en silencio: la fauna se extinguió. Siembra nuevas criaturas o reinicia.';
+  else if (!predators.length) note.textContent = 'Los depredadores se extinguieron. Sin nada que los controle, los herbívoros podrían multiplicarse sin freno.';
+  else if (!herbivores.length) note.textContent = 'Los herbívoros desaparecieron. Los depredadores que quedan no tardarán en pasar hambre.';
+  else if (!plants.length) note.textContent = 'El suelo quedó desnudo, sin plantas. Los herbívoros dependen de lo que logre brotar.';
+  else note.textContent = 'El ecosistema respira en equilibrio: cada generación hereda pequeñas mutaciones de velocidad y visión.';
+  updateHurricaneButton();
+}
+
+function checkGameOver() {
+  if (gameOverShown || herbivores.length || predators.length) return;
+  gameOverShown = true; running = false;
+  $('finalDay').textContent = Math.floor(tick / 240) + 1;
+  $('bestDayText').textContent = `Mejor marca de esta sesión: Día ${bestDay}.`;
+  updateStatsDOM();
+  $('gameOverOverlay').style.display = 'flex';
+}
+
+// ---------- Bucle principal (pasos fijos, independiente de los Hz) ----------
+function frame(ts) {
+  if (lastFrameTime === null) lastFrameTime = ts;
+  const dt = Math.min(ts - lastFrameTime, 250); // al volver de otra pestaña no hay avance en ráfaga
+  lastFrameTime = ts;
+
+  if (running) {
+    accumulator += dt * speedMult;
+    let steps = 0;
+    while (accumulator >= CONFIG.tickMs && steps < 40) {
+      step(); accumulator -= CONFIG.tickMs; steps++;
+      checkGameOver();
+      if (gameOverShown) break;
+    }
+    if (steps === 40) accumulator = 0;
+  }
+  render();
+  if (ts - lastUiUpdate > 150) { lastUiUpdate = ts; updateStatsDOM(); drawChart(); }
+  requestAnimationFrame(frame);
+}
+
+// ---------- Interfaz ----------
+const playPauseBtn = $('playPause');
+const setRunning = v => { running = v; playPauseBtn.textContent = v ? '⏸ Pausar' : '▶ Reanudar'; };
+playPauseBtn.addEventListener('click', () => setRunning(!running));
+$('resetBtn').addEventListener('click', () => { initEcosystem(); setRunning(true); });
+
+$('startBtn').addEventListener('click', () => { $('introOverlay').style.display = 'none'; setRunning(wasRunningBeforeModal); });
+$('helpBtn').addEventListener('click', () => { wasRunningBeforeModal = running; setRunning(false); $('introOverlay').style.display = 'flex'; });
+$('hurricaneBtn').addEventListener('click', triggerHurricane);
+$('restartBtn').addEventListener('click', () => {
+  $('gameOverOverlay').style.display = 'none'; gameOverShown = false;
+  initEcosystem(); setRunning(true);
+});
+
+document.querySelectorAll('.speed').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.speed').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  speedMult = parseFloat(btn.dataset.speed);
+}));
+
+document.querySelectorAll('.tool').forEach(btn => btn.addEventListener('click', () => {
+  const tool = btn.dataset.tool;
+  document.querySelectorAll('.tool').forEach(b => b.classList.remove('active'));
+  if (placeMode === tool) {
+    placeMode = null; canvasFrame.classList.remove('sowing'); toolHint.textContent = HINT_IDLE;
+  } else {
+    placeMode = tool; btn.classList.add('active'); canvasFrame.classList.add('sowing');
+    toolHint.textContent = 'Herramienta activa: toca o arrastra sobre el terrario para sembrar.';
+  }
+}));
+
+function placeAt(e) {
+  if (!placeMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (W / rect.width), y = (e.clientY - rect.top) * (H / rect.height);
+  if (lastSowPos && (x - lastSowPos.x) ** 2 + (y - lastSowPos.y) ** 2 < 18 * 18) return;
+  lastSowPos = { x, y };
+  if (!spawnAt(placeMode, x, y)) toolHint.textContent = 'Límite alcanzado: no caben más de ese tipo en el terrario.';
+}
+const stopSowing = () => { isSowing = false; lastSowPos = null; };
+canvas.addEventListener('pointerdown', e => { if (placeMode) { isSowing = true; placeAt(e); } });
+canvas.addEventListener('pointermove', e => { if (isSowing) placeAt(e); });
+window.addEventListener('pointerup', stopSowing);
+window.addEventListener('pointercancel', stopSowing);
+
+// ---------- Arranque ----------
+resizeAll();
+initEcosystem();
+requestAnimationFrame(frame);
+window.addEventListener('resize', scheduleResize);
+window.addEventListener('orientationchange', scheduleResize);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleResize);
+})();
+</script>
+</body>
+</html>
